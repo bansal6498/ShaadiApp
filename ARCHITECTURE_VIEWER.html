@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wedding Management App - Architecture Diagrams</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }
+        .diagram-container {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        .mermaid {
+            text-align: center;
+        }
+        .info-box {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>Wedding Management Web App - Architecture Diagrams</h1>
+    
+    <div class="info-box">
+        <strong>📌 How to View:</strong> Open this HTML file in any web browser (Chrome, Firefox, Safari, Edge) to see all diagrams rendered properly.
+    </div>
+
+    <h2>1. System Architecture Overview</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+graph TB
+    subgraph "Client Layer"
+        UI[Web Browser]
+        Mobile[Mobile Browser]
+    end
+    
+    subgraph "Frontend Application"
+        React[React/Next.js Frontend]
+        Components[UI Components]
+        State[State Management]
+    end
+    
+    subgraph "API Layer"
+        REST[REST API Server]
+        Auth[Authentication Service]
+        Validation[Input Validation]
+    end
+    
+    subgraph "Business Logic Layer"
+        FunctionService[Function Service]
+        GuestService[Guest Service]
+        BudgetService[Budget Service]
+        PaymentService[Payment Service]
+        ExportService[Export Service]
+    end
+    
+    subgraph "Data Layer"
+        DB[(PostgreSQL Database)]
+        FileStorage[File Storage]
+    end
+    
+    UI --> React
+    Mobile --> React
+    React --> Components
+    Components --> State
+    State --> REST
+    REST --> Auth
+    REST --> Validation
+    Validation --> FunctionService
+    Validation --> GuestService
+    Validation --> BudgetService
+    Validation --> PaymentService
+    FunctionService --> DB
+    GuestService --> DB
+    BudgetService --> DB
+    PaymentService --> DB
+    ExportService --> DB
+    ExportService --> FileStorage
+        </div>
+    </div>
+
+    <h2>2. Component Architecture</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+graph LR
+    subgraph "Frontend Components"
+        A[App Shell]
+        B[Function List Module]
+        C[Guest List Module]
+        D[Budget Module]
+        E[Payment Module]
+        F[Export Module]
+    end
+    
+    subgraph "Shared Components"
+        G[Navigation]
+        H[Data Table]
+        I[Form Components]
+        J[Modal/Dialog]
+        K[Export Button]
+    end
+    
+    A --> B
+    A --> C
+    A --> D
+    A --> E
+    A --> F
+    A --> G
+    
+    B --> H
+    B --> I
+    B --> J
+    
+    C --> H
+    C --> I
+    C --> J
+    C --> K
+    
+    D --> H
+    D --> I
+    
+    E --> H
+    E --> I
+    
+    F --> K
+        </div>
+    </div>
+
+    <h2>3. Database Schema Architecture</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+erDiagram
+    USERS ||--o{ FUNCTIONS : creates
+    USERS ||--o{ GUESTS : manages
+    USERS ||--o{ BUDGET_ITEMS : tracks
+    USERS ||--o{ PAYMENTS : records
+    
+    FUNCTIONS {
+        int id PK
+        string name
+        datetime date
+        time time
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+    
+    GUESTS {
+        int id PK
+        string name
+        boolean reception
+        boolean lunch
+        boolean return_gift
+        boolean dinner
+        boolean ceremony
+        text notes
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+    
+    BUDGET_ITEMS {
+        int id PK
+        string category
+        decimal planned_amount
+        decimal actual_amount
+        decimal amount_paid
+        decimal remaining_amount
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+    
+    PAYMENTS {
+        int id PK
+        date payment_date
+        decimal amount
+        string category
+        string paid_by
+        string payment_method
+        string platform
+        int user_id FK
+        datetime created_at
+        datetime updated_at
+    }
+    
+    GUEST_FUNCTIONS {
+        int id PK
+        int guest_id FK
+        int function_id FK
+    }
+        </div>
+    </div>
+
+    <h2>4. Data Flow Architecture</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant API
+    participant Service
+    participant Database
+    
+    User->>Frontend: Add Function
+    Frontend->>API: POST /api/functions
+    API->>Service: FunctionService.create()
+    Service->>Database: INSERT INTO functions
+    Database-->>Service: Function created
+    Service-->>API: Success response
+    API-->>Frontend: 201 Created
+    Frontend-->>User: Function added
+    
+    User->>Frontend: Add Guest with checkboxes
+    Frontend->>API: POST /api/guests
+    API->>Service: GuestService.create()
+    Service->>Database: INSERT INTO guests
+    Database-->>Service: Guest created
+    Service-->>API: Success response
+    API-->>Frontend: 201 Created
+    Frontend-->>User: Guest added
+    
+    User->>Frontend: Export Guest List (Reception)
+    Frontend->>API: GET /api/guests/export?filter=reception
+    API->>Service: GuestService.export(filter)
+    Service->>Database: SELECT * WHERE reception=true
+    Database-->>Service: Guest list
+    Service->>Service: Generate CSV/Excel
+    Service-->>API: File data
+    API-->>Frontend: File download
+    Frontend-->>User: Download file
+    
+    User->>Frontend: Add Budget Item
+    Frontend->>API: POST /api/budget
+    API->>Service: BudgetService.create()
+    Service->>Database: INSERT INTO budget_items
+    Service->>Service: Calculate remaining_amount
+    Database-->>Service: Budget item created
+    Service-->>API: Success response
+    API-->>Frontend: 201 Created
+    Frontend-->>User: Budget item added
+    
+    User->>Frontend: Record Payment
+    Frontend->>API: POST /api/payments
+    API->>Service: PaymentService.create()
+    Service->>Database: INSERT INTO payments
+    Service->>Service: Update budget amount_paid
+    Database-->>Service: Payment recorded
+    Service-->>API: Success response
+    API-->>Frontend: 201 Created
+    Frontend-->>User: Payment recorded
+        </div>
+    </div>
+
+    <h2>5. Module Breakdown</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+graph TD
+    subgraph "Function List Module"
+        F1[Function List View]
+        F2[Add Function Form]
+        F3[Edit Function Form]
+        F4[Delete Function]
+        F5[Function Calendar View]
+    end
+    
+    subgraph "Guest List Module"
+        G1[Guest List View]
+        G2[Add Guest Form]
+        G3[Edit Guest Form]
+        G4[Delete Guest]
+        G5[Guest Filter/Search]
+        G6[Export Guest Lists]
+    end
+    
+    subgraph "Budget Module"
+        B1[Budget Overview]
+        B2[Add Budget Item]
+        B3[Edit Budget Item]
+        B4[Delete Budget Item]
+        B5[Budget Summary Dashboard]
+        B6[Category-wise Breakdown]
+    end
+    
+    subgraph "Payment Module"
+        P1[Payment List View]
+        P2[Add Payment Form]
+        P3[Edit Payment Form]
+        P4[Delete Payment]
+        P5[Payment Filter]
+        P6[Payment Summary]
+    end
+    
+    subgraph "Export Module"
+        E1[Export Guest List by Function]
+        E2[Export Full Guest List]
+        E3[Export Budget Report]
+        E4[Export Payment Report]
+        E5[Export Combined Report]
+    end
+        </div>
+    </div>
+
+    <h2>6. Technology Stack</h2>
+    <div class="diagram-container">
+        <h3>Frontend</h3>
+        <ul>
+            <li><strong>Framework:</strong> React.js / Next.js</li>
+            <li><strong>State Management:</strong> Redux Toolkit / Zustand</li>
+            <li><strong>UI Library:</strong> Material-UI / Ant Design / Tailwind CSS</li>
+            <li><strong>Form Handling:</strong> React Hook Form</li>
+            <li><strong>Data Table:</strong> TanStack Table / Material-UI DataGrid</li>
+            <li><strong>Export:</strong> SheetJS (xlsx) / CSV export</li>
+        </ul>
+        
+        <h3>Backend</h3>
+        <ul>
+            <li><strong>Runtime:</strong> Node.js</li>
+            <li><strong>Framework:</strong> Express.js / Nest.js</li>
+            <li><strong>ORM:</strong> Prisma / TypeORM / Sequelize</li>
+            <li><strong>Validation:</strong> Joi / Zod</li>
+            <li><strong>Authentication:</strong> JWT / Passport.js</li>
+        </ul>
+        
+        <h3>Database</h3>
+        <ul>
+            <li><strong>Primary DB:</strong> PostgreSQL</li>
+            <li><strong>ORM:</strong> Prisma (recommended)</li>
+        </ul>
+        
+        <h3>Deployment</h3>
+        <ul>
+            <li><strong>Frontend:</strong> Vercel / Netlify</li>
+            <li><strong>Backend:</strong> AWS / Railway / Render</li>
+            <li><strong>Database:</strong> AWS RDS / Supabase / Railway PostgreSQL</li>
+        </ul>
+    </div>
+
+    <h2>7. API Endpoints Structure</h2>
+    <div class="diagram-container">
+        <pre>
+/api
+├── /auth
+│   ├── POST /register
+│   ├── POST /login
+│   └── POST /logout
+├── /functions
+│   ├── GET / (list all)
+│   ├── POST / (create)
+│   ├── GET /:id (get one)
+│   ├── PUT /:id (update)
+│   └── DELETE /:id (delete)
+├── /guests
+│   ├── GET / (list all)
+│   ├── POST / (create)
+│   ├── GET /:id (get one)
+│   ├── PUT /:id (update)
+│   ├── DELETE /:id (delete)
+│   └── GET /export?filter=reception (export filtered)
+├── /budget
+│   ├── GET / (list all)
+│   ├── POST / (create)
+│   ├── GET /:id (get one)
+│   ├── PUT /:id (update)
+│   ├── DELETE /:id (delete)
+│   └── GET /summary (get summary)
+├── /payments
+│   ├── GET / (list all)
+│   ├── POST / (create)
+│   ├── GET /:id (get one)
+│   ├── PUT /:id (update)
+│   ├── DELETE /:id (delete)
+│   └── GET /summary (get summary)
+└── /export
+    ├── GET /guests/:type (export guest list)
+    ├── GET /budget (export budget)
+    └── GET /payments (export payments)
+        </pre>
+    </div>
+
+    <h2>8. Feature Flow Diagram</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+flowchart TD
+    Start([User Login]) --> Dashboard[Dashboard]
+    Dashboard --> Functions[Function List]
+    Dashboard --> Guests[Guest List]
+    Dashboard --> Budget[Budget Management]
+    Dashboard --> Payments[Payment Management]
+    
+    Functions --> AddFunction[Add Function]
+    AddFunction --> FunctionForm[Enter Name, Date, Time]
+    FunctionForm --> SaveFunction[Save Function]
+    
+    Guests --> AddGuest[Add Guest]
+    AddGuest --> GuestForm[Enter Name + Checkboxes]
+    GuestForm --> SaveGuest[Save Guest]
+    Guests --> ExportGuests[Export Guest Lists]
+    ExportGuests --> FilterReception[Filter by Reception]
+    ExportGuests --> FilterLunch[Filter by Lunch]
+    ExportGuests --> FilterReturnGift[Filter by Return Gift]
+    
+    Budget --> AddBudget[Add Budget Item]
+    AddBudget --> BudgetForm[Enter Category, Amounts]
+    BudgetForm --> CalculateRemaining[Calculate Remaining]
+    CalculateRemaining --> SaveBudget[Save Budget]
+    
+    Payments --> AddPayment[Add Payment]
+    AddPayment --> PaymentForm[Enter Payment Details]
+    PaymentForm --> UpdateBudget[Update Budget Amount Paid]
+    UpdateBudget --> SavePayment[Save Payment]
+        </div>
+    </div>
+
+    <h2>9. Security Architecture</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+graph TB
+    subgraph "Security Layers"
+        A[HTTPS/TLS]
+        B[JWT Authentication]
+        C[Role-Based Access]
+        D[Input Validation]
+        E[SQL Injection Prevention]
+        F[CSRF Protection]
+    end
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+        </div>
+    </div>
+
+    <h2>10. Deployment Architecture</h2>
+    <div class="diagram-container">
+        <div class="mermaid">
+graph TB
+    subgraph "Production Environment"
+        CDN[CDN - Static Assets]
+        Frontend[Frontend Hosting]
+        API[API Server]
+        DB[(Database)]
+        Storage[File Storage]
+    end
+    
+    User[Users] --> CDN
+    User --> Frontend
+    Frontend --> API
+    API --> DB
+    API --> Storage
+        </div>
+    </div>
+
+    <h2>Key Design Decisions</h2>
+    <div class="diagram-container">
+        <ol>
+            <li><strong>Modular Architecture:</strong> Each feature (Functions, Guests, Budget, Payments) is a separate module for maintainability</li>
+            <li><strong>RESTful API:</strong> Standard REST endpoints for easy integration and scalability</li>
+            <li><strong>Relational Database:</strong> PostgreSQL for data integrity and complex queries</li>
+            <li><strong>Export Functionality:</strong> Server-side export generation for better performance</li>
+            <li><strong>Real-time Calculations:</strong> Budget remaining amount calculated automatically</li>
+            <li><strong>Flexible Guest Attributes:</strong> Boolean flags for different functions allow easy filtering and export</li>
+        </ol>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true
+            }
+        });
+    </script>
+</body>
+</html>
+
