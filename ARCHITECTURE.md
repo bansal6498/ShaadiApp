@@ -101,7 +101,14 @@ graph LR
 
 ## 3. Database Schema Architecture
 
-> **Note on `user_id`**: The `user_id` field in all tables (FUNCTIONS, GUESTS, BUDGET_ITEMS, PAYMENTS) is used for **multi-user support**. Each user can manage their own wedding independently. This ensures data isolation - when a user logs in, they only see and manage their own functions, guests, budget, and payments. This is essential for a multi-tenant application where multiple users can use the same system for their separate weddings.
+> **Note on `user_id`**: The `user_id` field in all tables (FUNCTIONS, GUESTS, BUDGET_ITEMS, PAYMENTS, GUEST_ATTRIBUTE_TYPES) is used for **multi-user support**. Each user can manage their own wedding independently. This ensures data isolation - when a user logs in, they only see and manage their own functions, guests, budget, payments, and custom attribute types. This is essential for a multi-tenant application where multiple users can use the same system for their separate weddings.
+
+> **Note on Dynamic Guest Attributes**: The guest list now supports **dynamic custom columns**! Instead of fixed columns in the GUESTS table, we use a flexible system:
+> - **GUEST_ATTRIBUTE_TYPES**: Stores custom attribute types (columns) that users can create (e.g., "Lunch", "Dinner", "Return Gift", "Reception", "Haldi", "Mehendi", etc.)
+> - **GUEST_ATTRIBUTES**: Stores the actual values (checkboxes) for each guest-attribute combination
+> - **Default Attributes**: System provides default attribute types (Lunch, Dinner, Return Gift, Ceremony) that users can customize
+> - **Easy Management**: Users can add, edit, delete, and reorder custom attributes just like managing functions
+> - **Unlimited Flexibility**: No schema changes needed - users can add as many custom columns as needed
 
 ```mermaid
 erDiagram
@@ -109,6 +116,7 @@ erDiagram
     USERS ||--o{ GUESTS : manages
     USERS ||--o{ BUDGET_ITEMS : tracks
     USERS ||--o{ PAYMENTS : records
+    USERS ||--o{ GUEST_ATTRIBUTE_TYPES : creates
     
     FUNCTIONS {
         int id PK
@@ -121,16 +129,35 @@ erDiagram
     GUESTS {
         int id PK
         string name
-        boolean reception
-        boolean lunch
-        boolean return_gift
-        boolean dinner
-        boolean ceremony
         text notes
         int user_id FK
         datetime created_at
         datetime updated_at
     }
+    
+    GUEST_ATTRIBUTE_TYPES {
+        int id PK
+        string name
+        string display_name
+        boolean is_default
+        int user_id FK
+        int display_order
+        datetime created_at
+        datetime updated_at
+    }
+    
+    GUEST_ATTRIBUTES {
+        int id PK
+        int guest_id FK
+        int attribute_type_id FK
+        boolean value
+        datetime created_at
+        datetime updated_at
+    }
+    
+    USERS ||--o{ GUEST_ATTRIBUTE_TYPES : creates
+    GUESTS ||--o{ GUEST_ATTRIBUTES : has
+    GUEST_ATTRIBUTE_TYPES ||--o{ GUEST_ATTRIBUTES : defines
     
     BUDGET_ITEMS {
         int id PK
@@ -238,6 +265,28 @@ sequenceDiagram
     Service-->>API: Success response
     API-->>Frontend: 200 OK
     Frontend-->>User: Guest updated
+    
+    User->>Frontend: Add Custom Attribute Type
+    Frontend->>API: POST /api/guest-attributes/types
+    API->>Service: GuestAttributeService.createType()
+    Service->>Database: INSERT INTO guest_attribute_types
+    Database-->>Service: Attribute type created
+    Service-->>API: Success response
+    API-->>Frontend: 201 Created
+    Frontend-->>User: New column added to guest list
+    
+    User->>Frontend: Edit Guest with Custom Attributes
+    Frontend->>API: GET /api/guest-attributes/types
+    API->>Database: SELECT * FROM guest_attribute_types WHERE user_id=?
+    Database-->>API: Attribute types list
+    API-->>Frontend: Attribute types
+    Frontend->>API: PATCH /api/guests/:id/attributes
+    API->>Service: GuestService.updateAttributes()
+    Service->>Database: UPSERT INTO guest_attributes
+    Database-->>Service: Attributes updated
+    Service-->>API: Success response
+    API-->>Frontend: 200 OK
+    Frontend-->>User: Guest attributes updated
 ```
 
 ## 5. Module Breakdown
@@ -260,6 +309,11 @@ graph TD
         G5[Delete Guest]
         G6[Guest Filter/Search]
         G7[Export Guest Lists]
+        G8[Manage Custom Attributes]
+        G9[Add Custom Attribute Type]
+        G10[Edit Custom Attribute Type]
+        G11[Delete Custom Attribute Type]
+        G12[Reorder Attributes]
     end
     
     subgraph "Budget Module"
@@ -335,10 +389,18 @@ graph TD
 │   ├── GET / (list all)
 │   ├── POST / (create)
 │   ├── GET /:id (get one)
-│   ├── PUT /:id (update - including checkboxes)
-│   ├── PATCH /:id/checkboxes (update only checkboxes)
+│   ├── PUT /:id (update - including attributes)
+│   ├── PATCH /:id/attributes (update only attributes)
 │   ├── DELETE /:id (delete)
-│   └── GET /export?filter=reception (export filtered)
+│   └── GET /export?filter=attribute_name (export filtered)
+├── /guest-attributes
+│   ├── GET /types (list all attribute types)
+│   ├── POST /types (create new attribute type)
+│   ├── GET /types/:id (get one attribute type)
+│   ├── PUT /types/:id (update attribute type)
+│   ├── DELETE /types/:id (delete attribute type)
+│   ├── PUT /types/reorder (reorder attribute types)
+│   └── GET /types/defaults (get default attribute types)
 ├── /budget
 │   ├── GET / (list all)
 │   ├── POST / (create)
@@ -377,10 +439,16 @@ flowchart TD
     Guests --> AddGuest[Add Guest]
     AddGuest --> GuestForm[Enter Name + Checkboxes]
     GuestForm --> SaveGuest[Save Guest]
+    Guests --> EditGuest[Edit Guest]
+    EditGuest --> EditCheckboxes[Edit Checkboxes Inline]
+    EditCheckboxes --> SaveGuestChanges[Save Changes]
+    Guests --> ManageAttributes[Manage Custom Attributes]
+    ManageAttributes --> AddAttributeType[Add New Attribute Type]
+    ManageAttributes --> EditAttributeType[Edit Attribute Type]
+    ManageAttributes --> DeleteAttributeType[Delete Attribute Type]
+    ManageAttributes --> ReorderAttributes[Reorder Attributes]
     Guests --> ExportGuests[Export Guest Lists]
-    ExportGuests --> FilterReception[Filter by Reception]
-    ExportGuests --> FilterLunch[Filter by Lunch]
-    ExportGuests --> FilterReturnGift[Filter by Return Gift]
+    ExportGuests --> FilterByAttribute[Filter by Any Attribute]
     
     Budget --> AddBudget[Add Budget Item]
     AddBudget --> BudgetForm[Enter Category, Amounts]
@@ -393,10 +461,6 @@ flowchart TD
     PaymentForm --> SelectCategory[Select Category from Budget]
     SelectCategory --> UpdateBudget[Auto-deduct from Budget]
     UpdateBudget --> SavePayment[Save Payment]
-    
-    Guests --> EditGuest[Edit Guest]
-    EditGuest --> EditCheckboxes[Edit Checkboxes Inline]
-    EditCheckboxes --> SaveGuestChanges[Save Changes]
 ```
 
 ## 9. Security Architecture
@@ -447,9 +511,11 @@ graph TB
 3. **Relational Database**: PostgreSQL for data integrity and complex queries
 4. **Export Functionality**: Server-side export generation for better performance
 5. **Real-time Calculations**: Budget remaining amount calculated automatically when payments are made
-6. **Flexible Guest Attributes**: Boolean flags for different functions allow easy filtering and export
-7. **Payment-Budget Integration**: Payments automatically deduct from budget items, and payment categories are populated from existing budget categories
-8. **Guest Management**: Guests can be edited after creation, including updating function checkboxes inline
-9. **User Isolation**: `user_id` in all tables ensures multi-user support - each user manages their own wedding data independently
-10. **Guest-Function Details**: `GUEST_FUNCTIONS` table stores additional information like number of persons and notes for each guest-function relationship
+6. **Dynamic Guest Attributes**: Users can create, edit, and delete custom attribute types (columns) for guests. Default attributes (Lunch, Dinner, Return Gift, Ceremony) are provided, but users can add custom ones like "Reception", "Haldi", "Mehendi", etc.
+7. **Flexible Guest Attributes**: Guest attributes are stored in a flexible many-to-many relationship, allowing unlimited custom columns without schema changes
+8. **Payment-Budget Integration**: Payments automatically deduct from budget items, and payment categories are populated from existing budget categories
+9. **Guest Management**: Guests can be edited after creation, including updating attributes inline. Custom attributes can be reordered and managed easily
+10. **User Isolation**: `user_id` in all tables ensures multi-user support - each user manages their own wedding data independently, including their custom attribute types
+11. **Guest-Function Details**: `GUEST_FUNCTIONS` table stores additional information like number of persons and notes for each guest-function relationship
+12. **Attribute Type Management**: Users can add/edit/delete/reorder custom attribute types, making the guest list fully customizable to their wedding needs
 
