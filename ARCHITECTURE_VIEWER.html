@@ -165,6 +165,9 @@ graph LR
     </div>
 
     <h2>3. Database Schema Architecture</h2>
+    <div class="info-box">
+        <strong>📌 Note on `user_id`:</strong> The <code>user_id</code> field in all tables (FUNCTIONS, GUESTS, BUDGET_ITEMS, PAYMENTS) is used for <strong>multi-user support</strong>. Each user can manage their own wedding independently. This ensures data isolation - when a user logs in, they only see and manage their own functions, guests, budget, and payments. This is essential for a multi-tenant application where multiple users can use the same system for their separate weddings.
+    </div>
     <div class="diagram-container">
         <div class="mermaid">
 erDiagram
@@ -179,8 +182,6 @@ erDiagram
         datetime date
         time time
         int user_id FK
-        datetime created_at
-        datetime updated_at
     }
     
     GUESTS {
@@ -214,6 +215,7 @@ erDiagram
         date payment_date
         decimal amount
         string category
+        int budget_item_id FK
         string paid_by
         string payment_method
         string platform
@@ -226,7 +228,13 @@ erDiagram
         int id PK
         int guest_id FK
         int function_id FK
+        int number_of_persons
+        text notes
+        datetime created_at
+        datetime updated_at
     }
+    
+    BUDGET_ITEMS ||--o{ PAYMENTS : "has payments"
         </div>
     </div>
 
@@ -279,14 +287,28 @@ sequenceDiagram
     Frontend-->>User: Budget item added
     
     User->>Frontend: Record Payment
+    Frontend->>API: GET /api/payments/categories
+    API->>Database: SELECT DISTINCT category FROM budget_items
+    Database-->>API: Categories list
+    API-->>Frontend: Categories
     Frontend->>API: POST /api/payments
     API->>Service: PaymentService.create()
     Service->>Database: INSERT INTO payments
-    Service->>Service: Update budget amount_paid
-    Database-->>Service: Payment recorded
+    Service->>Database: UPDATE budget_items SET amount_paid = amount_paid + payment.amount
+    Service->>Database: UPDATE budget_items SET remaining_amount = planned_amount - amount_paid
+    Database-->>Service: Payment recorded & Budget updated
     Service-->>API: Success response
     API-->>Frontend: 201 Created
-    Frontend-->>User: Payment recorded
+    Frontend-->>User: Payment recorded & Budget updated
+    
+    User->>Frontend: Edit Guest Checkboxes
+    Frontend->>API: PUT /api/guests/:id
+    API->>Service: GuestService.update()
+    Service->>Database: UPDATE guests SET reception, lunch, return_gift, etc.
+    Database-->>Service: Guest updated
+    Service-->>API: Success response
+    API-->>Frontend: 200 OK
+    Frontend-->>User: Guest updated
         </div>
     </div>
 
@@ -306,9 +328,10 @@ graph TD
         G1[Guest List View]
         G2[Add Guest Form]
         G3[Edit Guest Form]
-        G4[Delete Guest]
-        G5[Guest Filter/Search]
-        G6[Export Guest Lists]
+        G4[Edit Guest Checkboxes Inline]
+        G5[Delete Guest]
+        G6[Guest Filter/Search]
+        G7[Export Guest Lists]
     end
     
     subgraph "Budget Module"
@@ -327,6 +350,8 @@ graph TD
         P4[Delete Payment]
         P5[Payment Filter]
         P6[Payment Summary]
+        P7[Category Dropdown from Budget]
+        P8[Auto-deduct from Budget]
     end
     
     subgraph "Export Module"
@@ -392,7 +417,8 @@ graph TD
 │   ├── GET / (list all)
 │   ├── POST / (create)
 │   ├── GET /:id (get one)
-│   ├── PUT /:id (update)
+│   ├── PUT /:id (update - including checkboxes)
+│   ├── PATCH /:id/checkboxes (update only checkboxes)
 │   ├── DELETE /:id (delete)
 │   └── GET /export?filter=reception (export filtered)
 ├── /budget
@@ -404,11 +430,12 @@ graph TD
 │   └── GET /summary (get summary)
 ├── /payments
 │   ├── GET / (list all)
-│   ├── POST / (create)
+│   ├── POST / (create - auto-deducts from budget)
 │   ├── GET /:id (get one)
-│   ├── PUT /:id (update)
-│   ├── DELETE /:id (delete)
-│   └── GET /summary (get summary)
+│   ├── PUT /:id (update - recalculates budget)
+│   ├── DELETE /:id (delete - reverses budget deduction)
+│   ├── GET /summary (get summary)
+│   └── GET /categories (get categories from budget)
 └── /export
     ├── GET /guests/:type (export guest list)
     ├── GET /budget (export budget)
@@ -433,6 +460,9 @@ flowchart TD
     Guests --> AddGuest[Add Guest]
     AddGuest --> GuestForm[Enter Name + Checkboxes]
     GuestForm --> SaveGuest[Save Guest]
+    Guests --> EditGuest[Edit Guest]
+    EditGuest --> EditCheckboxes[Edit Checkboxes Inline]
+    EditCheckboxes --> SaveGuestChanges[Save Changes]
     Guests --> ExportGuests[Export Guest Lists]
     ExportGuests --> FilterReception[Filter by Reception]
     ExportGuests --> FilterLunch[Filter by Lunch]
@@ -444,8 +474,10 @@ flowchart TD
     CalculateRemaining --> SaveBudget[Save Budget]
     
     Payments --> AddPayment[Add Payment]
-    AddPayment --> PaymentForm[Enter Payment Details]
-    PaymentForm --> UpdateBudget[Update Budget Amount Paid]
+    AddPayment --> LoadCategories[Load Categories from Budget]
+    LoadCategories --> PaymentForm[Enter Payment Details]
+    PaymentForm --> SelectCategory[Select Category from Budget]
+    SelectCategory --> UpdateBudget[Auto-deduct from Budget]
     UpdateBudget --> SavePayment[Save Payment]
         </div>
     </div>
@@ -498,8 +530,12 @@ graph TB
             <li><strong>RESTful API:</strong> Standard REST endpoints for easy integration and scalability</li>
             <li><strong>Relational Database:</strong> PostgreSQL for data integrity and complex queries</li>
             <li><strong>Export Functionality:</strong> Server-side export generation for better performance</li>
-            <li><strong>Real-time Calculations:</strong> Budget remaining amount calculated automatically</li>
+            <li><strong>Real-time Calculations:</strong> Budget remaining amount calculated automatically when payments are made</li>
             <li><strong>Flexible Guest Attributes:</strong> Boolean flags for different functions allow easy filtering and export</li>
+            <li><strong>Payment-Budget Integration:</strong> Payments automatically deduct from budget items, and payment categories are populated from existing budget categories</li>
+            <li><strong>Guest Management:</strong> Guests can be edited after creation, including updating function checkboxes inline</li>
+            <li><strong>User Isolation:</strong> <code>user_id</code> in all tables ensures multi-user support - each user manages their own wedding data independently</li>
+            <li><strong>Guest-Function Details:</strong> <code>GUEST_FUNCTIONS</code> table stores additional information like number of persons and notes for each guest-function relationship</li>
         </ol>
     </div>
 
